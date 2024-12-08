@@ -3,10 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
 from .api.endpoints import system_info
-from .db.base import Base, engine
-
-# Create database tables
-Base.metadata.create_all(bind=engine)
+from .db.base import get_db
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

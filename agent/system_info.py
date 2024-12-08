@@ -5,7 +5,15 @@ import time
 import socket
 import uuid
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List
+import os
+import logging
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 class SystemInfoCollector:
     def __init__(self, api_url: str):
@@ -16,17 +24,26 @@ class SystemInfoCollector:
                                    for elements in range(0,2*6,2)][::-1])
         self.os_info = f"{platform.system()} {platform.release()}"
 
-    def register_computer(self) -> int:
-        """Register computer with the server and return computer_id"""
-        data = {
+    def register_computer(self):
+        computer_data = {
             "hostname": self.hostname,
             "ip_address": self.ip_address,
             "mac_address": self.mac_address,
             "os_info": self.os_info
         }
-        response = requests.post(f"{self.api_url}/computers/", json=data)
-        response.raise_for_status()
-        return response.json()["id"]
+        try:
+            response = requests.post(f"{self.api_url}/system-info/computers/", 
+                                     json=computer_data, 
+                                     timeout=10)  # Добавляем таймаут
+            response.raise_for_status()
+            logging.info(f"Successfully registered computer: {computer_data}")
+            logging.info(f"Response from server: {response.json()}")
+            return response.json().get('id')
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Failed to register computer: {e}")
+            logging.error(f"URL: {self.api_url}/system-info/computers/")
+            logging.error(f"Request data: {computer_data}")
+            raise
 
     def get_cpu_usage(self) -> float:
         return psutil.cpu_percent(interval=1)
@@ -70,45 +87,69 @@ class SystemInfoCollector:
             "packets_recv": network_stats.packets_recv
         }
 
-    def collect_and_send_info(self, computer_id: int):
-        """Collect system information and send it to the server"""
-        memory_info = self.get_memory_info()
-        system_info = {
-            "cpu_usage": self.get_cpu_usage(),
-            "memory_total": memory_info["total"],
-            "memory_used": memory_info["used"],
-            "disk_usage": self.get_disk_usage(),
-            "running_processes": self.get_running_processes(),
-            "network_stats": self.get_network_stats()
-        }
+    def send_system_info(self, computer_id: int, system_info: Dict):
+        logging.info(f"Sending system info for computer {computer_id}")
+        logging.info(f"System info data: {system_info}")
+        
+        try:
+            response = requests.post(
+                f"{self.api_url}/system-info/computers/{computer_id}/system-info/", 
+                json=system_info, 
+                timeout=10
+            )
+            response.raise_for_status()
+            logging.info("System info sent successfully")
+            logging.info(f"Server response: {response.json()}")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Failed to send system info: {e}")
+            logging.error(f"URL: {self.api_url}/system-info/computers/{computer_id}/system-info/")
+            logging.error(f"Data: {system_info}")
+            raise
 
-        response = requests.post(
-            f"{self.api_url}/computers/{computer_id}/system-info/",
-            json=system_info
-        )
-        response.raise_for_status()
-        return response.json()
+    def collect_and_send_info(self, computer_id: int):
+        try:
+            memory_info = self.get_memory_info()
+            data = {
+                "computer_id": computer_id,
+                "cpu_usage": self.get_cpu_usage(),
+                "memory_total": memory_info['total'],
+                "memory_used": memory_info['used'],
+                "disk_usage": self.get_disk_usage(),
+                "running_processes": self.get_running_processes(),
+                "network_stats": self.get_network_stats(),
+                "timestamp": datetime.now().isoformat()
+            }
+            self.send_system_info(computer_id, data)
+        except Exception as e:
+            logging.error(f"Failed to collect and send system info: {e}")
+            raise
 
 def main():
-    API_URL = "http://localhost:8000/api/v1/system-info"  # Измените на реальный URL сервера
-    INTERVAL = 60  # Интервал сбора данных в секундах
+    API_URL = os.getenv('SYSTEM_INFO_API_URL', 'http://localhost:8000/api/v1')
+    INTERVAL = int(os.getenv('SYSTEM_INFO_INTERVAL', 60))
+    MAX_RETRIES = int(os.getenv('SYSTEM_INFO_MAX_RETRIES', 5))
 
     collector = SystemInfoCollector(API_URL)
     
-    try:
-        computer_id = collector.register_computer()
-        print(f"Successfully registered computer with ID: {computer_id}")
-        
-        while True:
-            try:
-                collector.collect_and_send_info(computer_id)
-                print(f"Successfully sent system info at {datetime.now()}")
-            except Exception as e:
-                print(f"Error sending system info: {e}")
+    retry_count = 0
+    while retry_count < MAX_RETRIES:
+        try:
+            computer_id = collector.register_computer()
             
+            while True:
+                try:
+                    collector.collect_and_send_info(computer_id)
+                    time.sleep(INTERVAL)
+                except requests.exceptions.RequestException:
+                    logging.warning(f"Failed to send system info. Retrying in {INTERVAL} seconds...")
+                    time.sleep(INTERVAL)
+        
+        except requests.exceptions.RequestException as e:
+            retry_count += 1
+            logging.warning(f"Registration failed (attempt {retry_count}/{MAX_RETRIES}): {e}")
             time.sleep(INTERVAL)
-    except Exception as e:
-        print(f"Error registering computer: {e}")
+    
+    logging.error("Failed to register computer after maximum retries")
 
 if __name__ == "__main__":
     main()

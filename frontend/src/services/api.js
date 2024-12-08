@@ -11,14 +11,15 @@ const api = {
 
     // Получение информации о конкретном компьютере
     getComputer: async (computerId) => {
-        const response = await axios.get(`${API_URL}/computers/${computerId}`);
+        const response = await axios.get(`${API_URL}/computers/${computerId}/details`);
         return response.data;
     },
 
     // Получение последней системной информации
     getLatestSystemInfo: async (computerId) => {
-        const response = await axios.get(`${API_URL}/computers/${computerId}/system-info/latest`);
-        return response.data;
+        const response = await axios.get(`${API_URL}/computers/${computerId}/details`);
+        // Assuming the latest system info is the first (and only) item in system_info list
+        return response.data.system_info ? response.data.system_info[0] : null;
     },
 
     // Получение истории системной информации

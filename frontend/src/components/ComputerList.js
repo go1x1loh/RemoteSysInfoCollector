@@ -32,6 +32,10 @@ const ComputerList = () => {
         fetchComputers();
     }, []);
 
+    const handleComputerClick = (computerId) => {
+        navigate(`/computer/${computerId}`);
+    };
+
     if (loading) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -49,39 +53,32 @@ const ComputerList = () => {
                 {computers.map((computer) => (
                     <Grid item xs={12} sm={6} md={4} key={computer.id}>
                         <Card 
+                            onClick={() => handleComputerClick(computer.id)}
                             sx={{ 
-                                cursor: 'pointer',
-                                '&:hover': {
-                                    boxShadow: 6,
-                                    transform: 'scale(1.02)',
-                                    transition: 'all 0.2s ease-in-out'
-                                }
+                                cursor: 'pointer', 
+                                transition: 'transform 0.2s',
+                                '&:hover': { 
+                                    transform: 'scale(1.05)',
+                                    boxShadow: 3 
+                                } 
                             }}
-                            onClick={() => navigate(`/computer/${computer.id}`)}
                         >
                             <CardContent>
                                 <Box display="flex" alignItems="center" mb={2}>
-                                    <Computer sx={{ mr: 1 }} />
-                                    <Typography variant="h6">
-                                        {computer.hostname}
-                                    </Typography>
+                                    <Computer sx={{ mr: 2, color: 'primary.main' }} />
+                                    <Typography variant="h6">{computer.hostname}</Typography>
                                 </Box>
-                                <Typography color="textSecondary" gutterBottom>
+                                <Typography variant="body2" color="text.secondary">
                                     IP: {computer.ip_address}
                                 </Typography>
-                                <Typography color="textSecondary" gutterBottom>
-                                    MAC: {computer.mac_address}
-                                </Typography>
-                                <Typography color="textSecondary" gutterBottom>
+                                <Typography variant="body2" color="text.secondary">
                                     OS: {computer.os_info}
                                 </Typography>
-                                <Box display="flex" justifyContent="space-between" alignItems="center" mt={2}>
-                                    <Chip
-                                        icon={<Memory />}
-                                        label={new Date(computer.last_seen).toLocaleString()}
-                                        color="primary"
-                                        variant="outlined"
-                                        size="small"
+                                <Box display="flex" justifyContent="flex-end" mt={2}>
+                                    <Chip 
+                                        label="Подробнее" 
+                                        color="primary" 
+                                        size="small" 
                                     />
                                 </Box>
                             </CardContent>
